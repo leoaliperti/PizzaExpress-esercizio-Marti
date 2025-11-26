@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pizza API Tester</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <h1>🍕 Gestione Pizze API</h1>
+
+    <div class="dropdown">
+        <button class="dropbtn">Seleziona Operazione ▼</button>
+        <div class="dropdown-content">
+            <a href="#" data-form="getForm">GET - Lista Pizze</a>
+            <a href="#" data-form="setForm">POST - Nuova Pizza</a>
+            <a href="#" data-form="putForm">PUT - Modifica Prezzo</a>
+            <a href="#" data-form="deleteForm">DELETE - Elimina Pizza</a>
+        </div>
+    </div>
+
+    <form id="getForm" class="form-container active">
+        <h3>Recupera tutte le pizze</h3>
+        <p>Clicca sotto per vedere la lista completa.</p>
+        <button type="submit">Esegui GET</button>
+    </form>
+
+    <form id="setForm" class="form-container">
+        <h3>Aggiungi Nuova Pizza</h3>
+        <label>Nome Pizza:</label>
+        <input type="text" name="nuovoNome" placeholder="Es. Margherita" required>
+        <label>Prezzo (€):</label>
+        <input type="number" name="nuovoPrezzo" step="0.50" placeholder="Es. 5.50" required>
+        <button type="submit">Esegui POST</button>
+    </form>
+
+    <form id="putForm" class="form-container">
+        <h3>Aggiorna Prezzo Pizza</h3>
+        <label>ID Pizza:</label>
+        <input type="number" name="id" placeholder="ID della pizza da modificare" required>
+        <label>Nuovo Prezzo (€):</label>
+        <input type="number" name="prezzo" step="0.50" placeholder="Es. 8.00" required>
+        <button type="submit">Esegui PUT</button>
+    </form>
+
+    <form id="deleteForm" class="form-container">
+        <h3>Elimina Pizza</h3>
+        <label>ID Pizza:</label>
+        <input type="number" name="id" placeholder="ID della pizza da eliminare" required>
+        <button type="submit" style="background-color: #e74c3c;">Esegui DELETE</button>
+    </form>
+
+    <div class="divOutput">
+        <p style="color: #888;">I risultati appariranno qui...</p>
+    </div>
+
+    <script>
+        // --- IL TUO CODICE JS INCOLLATO QUI ---
+
+        // Costanti
+        const API_URL = "http://localhost:7297/api/pizze";
+        const dropdownButton = document.querySelector(".dropbtn");
+        const dropdownContent = document.querySelector(".dropdown-content");
+        const forms = document.querySelectorAll(".form-container");
+        const output = document.querySelector(".divOutput");
+        const formGet = document.getElementById("getForm");
+        const formPost = document.getElementById("setForm");
+        const formPut = document.getElementById("putForm");
+        const formDelete = document.getElementById("deleteForm");
+
+        /**
+         * Funzione per mostrare l'output nella UI.
+         */
+        function showOutput(title, data = null) {
+            output.innerHTML = `
+                <div class="outputMessage">
+                    <h2>${title}</h2>
+                    ${data ? `<pre>${JSON.stringify(data, null, 2)}</pre>` : ""}
+                </div>
+            `;
+        }
+
+        /**
+         * Funzione di utilità per gestire tutte le chiamate API con fetch.
+         */
+        async function apiCall(url, options = {}) {
+            try {
+                const res = await fetch(url, options);
+
+                if (!res.ok) {
+                    const errorText = await res.text();
+                    let errorMessage = `Errore HTTP ${res.status}: ${res.statusText}`;
+                    try {
+                        const errorJson = JSON.parse(errorText);
+                        errorMessage = errorJson.detail || JSON.stringify(errorJson, null, 2);
+                    } catch {
+                        if (errorText.trim().length > 0) {
+                            errorMessage = errorText;
+                        }
+                    }
+                    throw new Error(errorMessage);
+                }
+
+                const text = await res.text();
+                return text ? JSON.parse(text) : null;
+            } catch (err) {
+                throw new Error(`Errore di rete/API: ${err.message}`);
+            }
+        }
+
+        // ----------------------------------------------------
+        // Gestione Interfaccia Utente (Dropdown e Forms)
+        // ----------------------------------------------------
+
+        dropdownButton.addEventListener("click", e => {
+            e.preventDefault();
+            dropdownContent.classList.toggle("show");
+        });
+
+        document.querySelectorAll(".dropdown-content a").forEach(link => {
+            link.addEventListener("click", e => {
+                e.preventDefault();
+
+                forms.forEach(f => f.classList.remove("active"));
+                const form = document.getElementById(link.dataset.form);
+                if (form) form.classList.add("active");
+
+                dropdownContent.classList.remove("show");
+                
+                // Opzionale: Pulisce l'output quando cambi form
+                output.innerHTML = '<p style="color: #888;">Pronto per una nuova operazione...</p>';
+            });
+        });
+
+        document.addEventListener("click", e => {
+            if (!e.target.closest(".dropdown")) {
+                dropdownContent.classList.remove("show");
+            }
+        });
+
+        // ----------------------------------------------------
+        // Gestione Form API (CRUD)
+        // ----------------------------------------------------
+
+        // GET
+        formGet.addEventListener("submit", async e => {
+            e.preventDefault();
+            try {
+                const data = await apiCall(API_URL);
+                showOutput("GET eseguito con successo! (Tutte le pizze)", data);
+            } catch (err) {
+                showOutput("Errore GET:", err.message);
+            }
+        });
+
+        // POST
+        formPost.addEventListener("submit", async e => {
+            e.preventDefault();
+            const formData = new FormData(formPost);
+            const pizza = {
+                nome: formData.get("nuovoNome"),
+                prezzo: Number(formData.get("nuovoPrezzo")),
+            };
+            
+            if (!pizza.nome || isNaN(pizza.prezzo)) {
+                return showOutput("Errore POST:", "Nome mancante o Prezzo non valido.");
+            }
+
+            try {
+                const data = await apiCall(API_URL, {
+                    method: "POST",
+                    headers: {"Content-Type": "application/json"},
+                    body: JSON.stringify(pizza)
+                });
+                showOutput("POST eseguito con successo! (Nuova pizza creata)", data);
+                formPost.reset(); 
+            } catch (err) {
+                showOutput("Errore POST:", err.message);
+            }
+        });
+
+        // PUT
+        formPut.addEventListener("submit", async e => {
+            e.preventDefault();
+            const formData = new FormData(formPut);
+            const id = formData.get("id");
+            const prezzo = Number(formData.get("prezzo")); 
+            
+            if (!id || isNaN(prezzo)) {
+                return showOutput("Errore PUT:", "ID mancante o Prezzo non valido!");
+            }
+
+            const updateBody = { prezzo }; 
+
+            try {
+                const data = await apiCall(`${API_URL}/${id}`, {
+                    method: "PUT",
+                    headers: {"Content-Type": "application/json"},
+                    body: JSON.stringify(updateBody)
+                });
+                
+                showOutput("PUT eseguito con successo!", data || `Pizza con ID ${id} aggiornata.`);
+                formPut.reset();
+            } catch (err) {
+                showOutput("Errore PUT:", err.message);
+            }
+        });
+
+        // DELETE
+        formDelete.addEventListener("submit", async e => {
+            e.preventDefault();
+            const id = formDelete.querySelector('input[name="id"]').value;
+
+            if (!id)
+                return showOutput("Errore DELETE:", "Inserisci un ID!");
+
+            try {
+                await apiCall(`${API_URL}/${id}`, { method: "DELETE" });
+                showOutput("DELETE eseguito con successo!", `Pizza con ID ${id} eliminata.`);
+                formDelete.reset();
+            } catch (err) {
+                showOutput("Errore DELETE:", err.message);
+            }
+        });
+    </script>
+</body>
+</html>
